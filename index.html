@@ -1,0 +1,757 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>My Bingo Card Maker</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&family=Inter:wght@400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet">
+
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+  <style>
+    :root{
+      /* Page */
+      --bg1:#0b1220;
+      --bg2:#111a2f;
+      --glow:#7dd3fc;
+
+      /* Layout */
+      --sidebar-w: 360px;
+
+      /* Title */
+      --title-font: "DM Serif Display", "Playfair Display", serif;
+      --title-size: 56px;
+      --title-color: #eef2ff;
+
+      /* Grid */
+      --grid-size: 5;           /* JS reads this */
+      --gap: 14px;
+
+      /* Cells */
+      --cell-font: "Inter", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      --cell-font-size: 14px;
+      --cell-text: #0b1220;
+      --cell-pad: 14px;
+      --cell-radius: 16px;
+      --cell-border: rgba(15,23,42,.10);
+
+      --cell-bg1: rgba(255,255,255,0.92);
+      --cell-bg2: rgba(255,255,255,0.70);
+
+      /* Card */
+      --card-radius: 22px;
+      --card-border: rgba(255,255,255,.10);
+      --card-shadow: 0 18px 60px rgba(0,0,0,.45);
+    }
+
+    *{ box-sizing:border-box; }
+    html,body{ height:100%; }
+    body{
+      margin:0;
+      font-family: var(--cell-font);
+      color: rgba(255,255,255,.92);
+      background:
+        radial-gradient(1200px 800px at 20% 10%, rgba(125, 211, 252, .18), transparent 60%),
+        radial-gradient(900px 700px at 85% 25%, rgba(167, 139, 250, .18), transparent 55%),
+        linear-gradient(140deg, var(--bg1), var(--bg2));
+      overflow-x:hidden;
+    }
+
+    /* Subtle noise overlay */
+    body:before{
+      content:"";
+      position:fixed;
+      inset:0;
+      pointer-events:none;
+      opacity:.05;
+      background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="140" height="140"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency=".8" numOctaves="2" stitchTiles="stitch"/></filter><rect width="140" height="140" filter="url(%23n)" opacity=".35"/></svg>');
+      mix-blend-mode: overlay;
+    }
+
+    .app{
+      min-height:100%;
+      display:flex;
+      gap: 22px;
+      padding: 22px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    /* Sidebar */
+    .sidebar{
+      width: var(--sidebar-w);
+      flex: 0 0 var(--sidebar-w);
+      position: sticky;
+      top: 16px;
+      height: calc(100vh - 44px);
+      border-radius: 22px;
+      background: linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.04));
+      border: 1px solid rgba(255,255,255,.10);
+      box-shadow: 0 18px 60px rgba(0,0,0,.30);
+      backdrop-filter: blur(10px);
+      padding: 16px;
+      overflow:auto;
+    }
+
+    .sidebar h2{
+      margin: 4px 0 12px;
+      font-family: "Inter", system-ui, sans-serif;
+      letter-spacing: .2px;
+      font-size: 16px;
+      color: rgba(255,255,255,.90);
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+    }
+
+    .badge{
+      font-size: 12px;
+      padding: 5px 10px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(255,255,255,.06);
+      color: rgba(255,255,255,.80);
+    }
+
+    .goals{
+      width: 100%;
+      min-height: 280px;
+      height: 42vh;
+      max-height: 520px;
+      resize: vertical;
+      border-radius: 16px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(10, 16, 28, .55);
+      color: rgba(255,255,255,.92);
+      padding: 12px;
+      outline: none;
+      line-height: 1.35;
+      font-size: 13px;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,.06);
+    }
+
+    .goals::placeholder{ color: rgba(255,255,255,.45); }
+
+    .row{
+      display:flex;
+      gap: 10px;
+      align-items:center;
+    }
+
+    .btn{
+      width:100%;
+      margin-top: 10px;
+      border: 0;
+      border-radius: 16px;
+      padding: 12px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      color: rgba(10,16,28,.95);
+      background: linear-gradient(135deg, rgba(125, 211, 252, .95), rgba(167, 139, 250, .95));
+      box-shadow: 0 10px 26px rgba(125,211,252,.18), 0 10px 26px rgba(167,139,250,.12);
+      transition: transform .08s ease, filter .12s ease;
+    }
+    .btn:active{ transform: translateY(1px) scale(.995); }
+    .btn:hover{ filter: brightness(1.04) saturate(1.02); }
+
+    .btn.secondary{
+      margin-top: 10px;
+      background: rgba(255,255,255,.08);
+      color: rgba(255,255,255,.92);
+      border: 1px solid rgba(255,255,255,.12);
+      box-shadow: none;
+    }
+
+    .hint{
+      margin: 10px 2px 14px;
+      font-size: 12px;
+      color: rgba(255,255,255,.70);
+      line-height: 1.35;
+    }
+
+    .divider{
+      height: 1px;
+      background: rgba(255,255,255,.10);
+      margin: 14px 0;
+    }
+
+    /* Config grid */
+    .cfg{
+      display:grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 6px;
+    }
+    .cfg .field{
+      background: rgba(10, 16, 28, .40);
+      border: 1px solid rgba(255,255,255,.10);
+      border-radius: 16px;
+      padding: 10px;
+    }
+    .field label{
+      display:flex;
+      justify-content:space-between;
+      gap: 10px;
+      align-items:center;
+      font-size: 12px;
+      color: rgba(255,255,255,.80);
+      margin-bottom: 8px;
+    }
+    .field small{
+      color: rgba(255,255,255,.60);
+      font-size: 11px;
+    }
+
+    input[type="range"]{ width:100%; }
+    input[type="color"]{
+      width: 34px;
+      height: 22px;
+      padding: 0;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,.18);
+      background: transparent;
+      cursor: pointer;
+    }
+    select, input[type="number"]{
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,.14);
+      background: rgba(10, 16, 28, .55);
+      color: rgba(255,255,255,.92);
+      padding: 10px;
+      outline: none;
+    }
+
+    .field.full{ grid-column: 1 / -1; }
+
+    /* Main */
+    .main{
+      flex: 1 1 auto;
+      min-width: 0;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding: 10px 0;
+    }
+
+    .card{
+      width: min(880px, 100%);
+      border-radius: var(--card-radius);
+      background: linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.06));
+      border: 1px solid var(--card-border);
+      box-shadow: var(--card-shadow);
+      backdrop-filter: blur(10px);
+      padding: 22px;
+      position: relative;
+    }
+
+    .card:before{
+      content:"";
+      position:absolute;
+      inset:-1px;
+      border-radius: inherit;
+      background: radial-gradient(800px 240px at 20% 0%, rgba(125,211,252,.22), transparent 60%),
+                  radial-gradient(700px 220px at 90% 18%, rgba(167,139,250,.20), transparent 55%);
+      pointer-events:none;
+      mask: linear-gradient(#000, transparent 85%);
+      opacity: .9;
+    }
+
+    .titleWrap{
+      position: relative;
+      display:flex;
+      flex-direction:column;
+      align-items:center;
+      gap: 6px;
+      margin: 6px 0 18px;
+    }
+
+    .title{
+      font-family: var(--title-font);
+      font-size: clamp(34px, 3.6vw, var(--title-size));
+      color: var(--title-color);
+      letter-spacing: .4px;
+      margin:0;
+      line-height: 1.05;
+      text-align:center;
+      padding: 6px 12px;
+      border-radius: 14px;
+      outline: none;
+    }
+    .title[contenteditable="true"]:focus{
+      box-shadow: 0 0 0 4px rgba(125,211,252,.18), 0 0 0 1px rgba(255,255,255,.10) inset;
+      background: rgba(255,255,255,.06);
+    }
+
+    .subtitle{
+      font-size: 12px;
+      color: rgba(255,255,255,.75);
+      text-align:center;
+      margin:0;
+    }
+
+    .grid{
+      position: relative;
+      display:grid;
+      grid-template-columns: repeat(var(--grid-size), 1fr);
+      gap: var(--gap);
+      margin-top: 10px;
+    }
+
+    .cell{
+      aspect-ratio: 1 / 1;
+      border-radius: var(--cell-radius);
+      border: 1px solid var(--cell-border);
+      background: linear-gradient(180deg, var(--cell-bg1), var(--cell-bg2));
+      box-shadow: 0 10px 24px rgba(0,0,0,.18);
+      padding: var(--cell-pad);
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      text-align:center;
+
+      font-family: var(--cell-font);
+      font-size: var(--cell-font-size);
+      color: var(--cell-text);
+
+      line-height: 1.25;
+      outline: none;
+      user-select: text;
+      transition: transform .10s ease, box-shadow .12s ease;
+    }
+
+    .cell:hover{
+      transform: translateY(-1px);
+      box-shadow: 0 14px 28px rgba(0,0,0,.22);
+    }
+
+    .cell:focus{
+      box-shadow: 0 0 0 4px rgba(167,139,250,.18), 0 0 0 1px rgba(15,23,42,.10) inset, 0 14px 28px rgba(0,0,0,.22);
+      transform: translateY(-1px);
+    }
+
+    .cell.empty{ color: rgba(15,23,42,.45); }
+
+    /* Responsive */
+    @media (max-width: 1040px){
+      .app{ flex-direction: column; }
+      .sidebar{
+        width: 100%;
+        flex: 0 0 auto;
+        position: relative;
+        height: auto;
+      }
+      .main{ padding-top: 0; }
+      :root{ --sidebar-w: 100%; }
+    }
+
+    /* Print-friendly */
+    @media print{
+      body{ background: #fff; color:#000; }
+      body:before{ display:none; }
+      .sidebar{ display:none; }
+      .app{ padding:0; }
+      .card{
+        box-shadow:none;
+        border: 1px solid #ddd;
+        background:#fff;
+      }
+      .title{ color:#000; }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <h2>
+        Goals & Controls
+        <span class="badge"><span id="countBadge">0</span>/25</span>
+      </h2>
+
+      <textarea id="goalsInput" class="goals" placeholder="Paste 25 goals (one per line)…&#10;&#10;Example:&#10;Run a 5K&#10;Call my parents&#10;Read 12 books&#10;Learn a new recipe&#10;..." spellcheck="false"></textarea>
+
+      <button id="createBtn" class="btn">Create</button>
+      <div class="row">
+        <button id="shuffleBtn" class="btn secondary" style="flex:1;">Shuffle</button>
+        <button id="clearBtn" class="btn secondary" style="flex:1;">Clear</button>
+      </div>
+
+      <p class="hint">
+        Click the title or any square to edit text. “Create” fills the grid from your pasted lines.
+        Lines beyond 25 are ignored; missing lines leave blanks.
+      </p>
+
+      <div class="divider"></div>
+
+      <h2 style="margin-top:0;">Appearance <span class="badge">Live</span></h2>
+
+      <div class="cfg">
+        <div class="field">
+          <label>Grid size <small>(NxN)</small></label>
+          <input id="gridSize" type="number" min="2" max="10" value="5"/>
+        </div>
+
+        <div class="field">
+          <label>Gap <small>(px)</small></label>
+          <input id="gap" type="range" min="6" max="24" value="14"/>
+        </div>
+
+        <div class="field">
+          <label>Cell font</label>
+          <select id="cellFont">
+            <option value='"Inter", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif' selected>Inter (clean)</option>
+            <option value='"Playfair Display", serif'>Playfair Display (classic)</option>
+            <option value='system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif'>System</option>
+            <option value='"DM Serif Display", serif'>DM Serif Display</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Cell font size <small>(px)</small></label>
+          <input id="cellFontSize" type="range" min="10" max="22" value="14"/>
+        </div>
+
+        <div class="field">
+          <label>Cell padding <small>(px)</small></label>
+          <input id="cellPad" type="range" min="8" max="22" value="14"/>
+        </div>
+
+        <div class="field">
+          <label>Cell radius <small>(px)</small></label>
+          <input id="cellRadius" type="range" min="8" max="26" value="16"/>
+        </div>
+
+        <div class="field">
+          <label>Text color</label>
+          <div class="row" style="justify-content:space-between;">
+            <input id="cellTextColor" type="color" value="#0b1220"/>
+            <small id="cellTextColorHex">#0b1220</small>
+          </div>
+        </div>
+
+        <div class="field">
+          <label>Cell gradient</label>
+          <div class="row" style="justify-content:space-between;">
+            <input id="cellBg1" type="color" value="#ffffff"/>
+            <input id="cellBg2" type="color" value="#f1f5f9"/>
+          </div>
+        </div>
+
+        <div class="field full">
+          <label>Title font</label>
+          <select id="titleFont">
+            <option value='"DM Serif Display", "Playfair Display", serif' selected>DM Serif Display (fancy)</option>
+            <option value='"Playfair Display", serif'>Playfair Display</option>
+            <option value='"Inter", system-ui, sans-serif'>Inter</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Title size <small>(px)</small></label>
+          <input id="titleSize" type="range" min="28" max="78" value="56"/>
+        </div>
+
+        <div class="field">
+          <label>Title color</label>
+          <div class="row" style="justify-content:space-between;">
+            <input id="titleColor" type="color" value="#eef2ff"/>
+            <small id="titleColorHex">#eef2ff</small>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider"></div>
+
+      <div class="row">
+        <button id="exportBtn" class="btn secondary" style="flex:1;">Copy as Lines</button>
+        <button id="resetThemeBtn" class="btn secondary" style="flex:1;">Reset</button>
+      </div>
+
+      <p class="hint" style="margin-top:10px;">
+        “Copy as Lines” copies the current grid text (top-left → bottom-right) into the sidebar input format.
+      </p>
+    </aside>
+
+    <main class="main">
+      <section class="card">
+        <div class="titleWrap">
+          <h1 id="title" class="title" contenteditable="true" spellcheck="false">My Bingo Card</h1>
+          <p class="subtitle">Life goals, habits, dares, buckets — anything. Click to edit.</p>
+        </div>
+
+        <div id="grid" class="grid" aria-label="Bingo grid"></div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    (function(){
+      const $root = $(document.documentElement);
+      const $grid = $("#grid");
+      const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
+
+      function setVar(name, value){
+        $root.css(name, value);
+      }
+
+      function buildGrid(n){
+        n = clamp(parseInt(n, 10) || 5, 2, 10);
+        setVar("--grid-size", n);
+        $grid.empty();
+
+        const total = n * n;
+        for(let i=0;i<total;i++){
+          const $c = $(`<div class="cell empty" contenteditable="true" spellcheck="false">Click to edit</div>`);
+          $c.on("input", function(){
+            const txt = $(this).text().trim();
+            $(this).toggleClass("empty", txt.length === 0);
+          });
+          $c.on("focus", function(){
+            if($(this).hasClass("empty")){
+              // Select-all behavior for placeholder
+              const el = this;
+              requestAnimationFrame(() => {
+                const range = document.createRange();
+                range.selectNodeContents(el);
+                const sel = window.getSelection();
+                sel.removeAllRanges();
+                sel.addRange(range);
+              });
+            }
+          });
+          $grid.append($c);
+        }
+
+        updateCountBadge();
+      }
+
+      function getLinesFromTextarea(){
+        const raw = $("#goalsInput").val() || "";
+        return raw
+          .split(/\r?\n/)
+          .map(s => s.trim())
+          .filter(s => s.length > 0);
+      }
+
+      function fillGridFromLines(lines){
+        const n = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--grid-size")) || 5;
+        const total = n * n;
+        const $cells = $grid.find(".cell");
+
+        for(let i=0;i<total;i++){
+          const v = (lines[i] ?? "").trim();
+          const $cell = $cells.eq(i);
+          if(v){
+            $cell.text(v).removeClass("empty");
+          }else{
+            $cell.text("Click to edit").addClass("empty");
+          }
+        }
+        updateCountBadge();
+      }
+
+      function updateCountBadge(){
+        const n = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--grid-size")) || 5;
+        const total = n * n;
+        const filled = $grid.find(".cell").toArray().filter(el => $(el).text().trim() && !$(el).hasClass("empty")).length;
+        $("#countBadge").text(filled);
+        // keep the sidebar badge denominator aligned with grid size
+        $(".badge").first().html(`<span id="countBadge">${filled}</span>/${total}`);
+      }
+
+      function shuffleGrid(){
+        const texts = $grid.find(".cell").toArray().map(el => {
+          const $el = $(el);
+          const t = $el.text().trim();
+          return ($el.hasClass("empty") || t === "Click to edit") ? "" : t;
+        });
+
+        // Fisher–Yates
+        for(let i = texts.length - 1; i > 0; i--){
+          const j = Math.floor(Math.random() * (i + 1));
+          [texts[i], texts[j]] = [texts[j], texts[i]];
+        }
+        fillGridFromLines(texts);
+      }
+
+      function clearGrid(){
+        $grid.find(".cell").each(function(){
+          $(this).text("Click to edit").addClass("empty");
+        });
+        updateCountBadge();
+      }
+
+      function copyGridAsLines(){
+        const lines = $grid.find(".cell").toArray().map(el => {
+          const $el = $(el);
+          const t = $el.text().trim();
+          return ($el.hasClass("empty") || t === "Click to edit") ? "" : t;
+        });
+        const out = lines.join("\n").trimEnd();
+        navigator.clipboard?.writeText(out).then(() => {
+          // also place into textarea for convenience
+          $("#goalsInput").val(out);
+        }).catch(() => {
+          // fallback: still place in textarea
+          $("#goalsInput").val(out);
+          $("#goalsInput").focus().select();
+        });
+      }
+
+      function resetTheme(){
+        // Values match defaults in :root
+        $("#gridSize").val(5);
+        $("#gap").val(14);
+        $("#cellFont").val('"Inter", system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif');
+        $("#cellFontSize").val(14);
+        $("#cellPad").val(14);
+        $("#cellRadius").val(16);
+        $("#cellTextColor").val("#0b1220");
+        $("#cellBg1").val("#ffffff");
+        $("#cellBg2").val("#f1f5f9");
+        $("#titleFont").val('"DM Serif Display", "Playfair Display", serif');
+        $("#titleSize").val(56);
+        $("#titleColor").val("#eef2ff");
+
+        applyConfigToCSS();
+        buildGrid(5);
+        clearGrid();
+      }
+
+      function applyConfigToCSS(){
+        const n = clamp(parseInt($("#gridSize").val(), 10) || 5, 2, 10);
+        const gap = parseInt($("#gap").val(), 10) || 14;
+        const cellFont = $("#cellFont").val();
+        const cellFontSize = parseInt($("#cellFontSize").val(), 10) || 14;
+        const cellPad = parseInt($("#cellPad").val(), 10) || 14;
+        const cellRadius = parseInt($("#cellRadius").val(), 10) || 16;
+
+        const cellText = $("#cellTextColor").val();
+        const bg1 = $("#cellBg1").val();
+        const bg2 = $("#cellBg2").val();
+
+        const titleFont = $("#titleFont").val();
+        const titleSize = parseInt($("#titleSize").val(), 10) || 56;
+        const titleColor = $("#titleColor").val();
+
+        $("#cellTextColorHex").text(cellText);
+        $("#titleColorHex").text(titleColor);
+
+        setVar("--gap", `${gap}px`);
+        setVar("--cell-font", cellFont);
+        setVar("--cell-font-size", `${cellFontSize}px`);
+        setVar("--cell-pad", `${cellPad}px`);
+        setVar("--cell-radius", `${cellRadius}px`);
+        setVar("--cell-text", cellText);
+        setVar("--cell-bg1", hexToRgba(bg1, 0.92));
+        setVar("--cell-bg2", hexToRgba(bg2, 0.70));
+
+        setVar("--title-font", titleFont);
+        setVar("--title-size", `${titleSize}px`);
+        setVar("--title-color", titleColor);
+
+        // Rebuild if grid size changed (preserve existing text)
+        const currentN = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--grid-size")) || 5;
+        if(n !== currentN){
+          const currentTexts = $grid.find(".cell").toArray().map(el => {
+            const $el = $(el);
+            const t = $el.text().trim();
+            return ($el.hasClass("empty") || t === "Click to edit") ? "" : t;
+          });
+          buildGrid(n);
+          fillGridFromLines(currentTexts);
+        } else {
+          updateCountBadge();
+        }
+      }
+
+      function hexToRgba(hex, alpha){
+        // Accepts #RRGGBB
+        const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        if(!m) return `rgba(255,255,255,${alpha})`;
+        const r = parseInt(m[1], 16);
+        const g = parseInt(m[2], 16);
+        const b = parseInt(m[3], 16);
+        return `rgba(${r},${g},${b},${alpha})`;
+      }
+
+      // Events
+      $("#createBtn").on("click", function(){
+        const lines = getLinesFromTextarea();
+        fillGridFromLines(lines);
+      });
+
+      $("#shuffleBtn").on("click", shuffleGrid);
+      $("#clearBtn").on("click", clearGrid);
+      $("#exportBtn").on("click", copyGridAsLines);
+      $("#resetThemeBtn").on("click", resetTheme);
+
+      // Update badge as user types in textarea
+      $("#goalsInput").on("input", function(){
+        const n = parseInt(getComputedStyle(document.documentElement).getPropertyValue("--grid-size")) || 5;
+        const total = n*n;
+        const count = getLinesFromTextarea().slice(0,total).length;
+        // This badge counts filled lines, not filled grid (grid badge updates separately).
+        // Keep it subtle: show in title badge by replacing only the numerator
+        $("#countBadge").text(count);
+      });
+
+      // Config inputs live update
+      $("#gridSize, #gap, #cellFont, #cellFontSize, #cellPad, #cellRadius, #cellTextColor, #cellBg1, #cellBg2, #titleFont, #titleSize, #titleColor")
+        .on("input change", applyConfigToCSS);
+
+      // Title behavior: select all on focus
+      $("#title").on("focus", function(){
+        const el = this;
+        requestAnimationFrame(() => {
+          const range = document.createRange();
+          range.selectNodeContents(el);
+          const sel = window.getSelection();
+          sel.removeAllRanges();
+          sel.addRange(range);
+        });
+      });
+
+      // Init
+      buildGrid(5);
+      applyConfigToCSS();
+
+      // Optional demo content (comment out if you want blank by default)
+      const demo = [
+        "Read 12 books",
+        "Run a 5K",
+        "Call family weekly",
+        "Cook 10 new recipes",
+        "Spend a day unplugged",
+        "Learn a new song",
+        "Plan a weekend trip",
+        "Drink more water",
+        "Donate old clothes",
+        "Write a letter",
+        "Take a long walk",
+        "Try a new hobby",
+        "Improve sleep routine",
+        "Meditate 10 minutes",
+        "Finish a course",
+        "Declutter a drawer",
+        "Volunteer once",
+        "Practice gratitude",
+        "Go to a concert",
+        "Start a small project",
+        "Meet a friend",
+        "Watch the sunrise",
+        "Journal 5 days",
+        "Do a tech detox",
+        "Make something creative"
+      ];
+      $("#goalsInput").val(demo.join("\n"));
+      fillGridFromLines(demo);
+    })();
+  </script>
+</body>
+</html>
